@@ -57,6 +57,35 @@ const tokenIdToMarket = new Map(); // tokenId -> marketId
 // 已通知的机会
 const notifiedOpportunities = new Set();
 
+// 运行统计
+const stats = {
+  messagesReceived: 0,
+  priceUpdates: 0,
+  arbitrageChecks: 0,
+  opportunitiesFound: 0,
+  startTime: Date.now()
+};
+
+/**
+ * 检测API延迟
+ */
+async function checkLatency() {
+  try {
+    const startTime = Date.now();
+    const response = await fetch('https://gamma-api.polymarket.com/events?limit=1');
+    const endTime = Date.now();
+    
+    if (response.ok) {
+      const latency = endTime - startTime;
+      console.log(colors.cyan(`API 延迟: ${latency}ms`));
+      return latency;
+    }
+  } catch (error) {
+    console.log(colors.yellow('无法检测API延迟'));
+  }
+  return null;
+}
+
 /**
  * 加载所有市场数据并更新缓存
  */
@@ -64,15 +93,25 @@ async function loadMarkets() {
   console.log(colors.cyan('正在加载市场数据...'));
   
   try {
-    // 使用API获取市场数据
-    const response = await fetch('https://trading.polymarket.com/markets');
+    // 使用API获取事件数据（包含市场）- 添加超时
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+    
+    const startTime = Date.now();
+    const response = await fetch('https://gamma-api.polymarket.com/events?closed=false&limit=50', {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    const loadTime = Date.now() - startTime;
+    
     if (!response.ok) {
       throw new Error(`获取市场数据失败: ${response.status}`);
     }
     
-    const markets = await response.json();
+    console.log(colors.gray(`正在解析市场数据... (耗时: ${loadTime}ms)`));
+    const events = await response.json();
     
-    if (!Array.isArray(markets)) {
+    if (!Array.isArray(events)) {
       throw new Error('市场数据格式不正确，预期应为数组');
     }
     
@@ -83,36 +122,43 @@ async function loadMarkets() {
     // 处理市场数据
     const processedMarkets = [];
     
-    for (const market of markets) {
-      if (!market.conditionId || !market.marketId || !market.outcomes || market.outcomes.length < 2) {
-        continue; // 跳过无效市场
+    // 从events中提取markets
+    for (const event of events) {
+      if (!event.markets || !Array.isArray(event.markets)) {
+        continue;
       }
       
-      // 创建规范化的市场对象
-      const processedMarket = {
-        marketId: market.marketId,
-        conditionId: market.conditionId,
-        title: market.question || market.title || `Market ${market.marketId}`,
-        outcomesInfo: [
-          { 
-            tokenId: market.outcomes[0].tokenId, 
-            name: market.outcomes[0].name || 'YES' 
-          },
-          { 
-            tokenId: market.outcomes[1].tokenId,
-            name: market.outcomes[1].name || 'NO'
-          }
-        ]
-      };
-      
-      // 存储到缓存
-      marketCache.set(processedMarket.marketId, processedMarket);
-      
-      // 映射tokenId到marketId
-      tokenIdToMarket.set(processedMarket.outcomesInfo[0].tokenId, processedMarket.marketId);
-      tokenIdToMarket.set(processedMarket.outcomesInfo[1].tokenId, processedMarket.marketId);
-      
-      processedMarkets.push(processedMarket);
+      for (const market of event.markets) {
+        if (!market.clobTokenIds || market.clobTokenIds.length < 2) {
+          continue; // 跳过无效市场
+        }
+        
+        // 创建规范化的市场对象
+        const processedMarket = {
+          marketId: market.id,
+          conditionId: market.conditionId,
+          title: market.question || event.title || `Market ${market.id}`,
+          outcomesInfo: [
+            { 
+              tokenId: market.clobTokenIds[0], 
+              name: 'YES' 
+            },
+            { 
+              tokenId: market.clobTokenIds[1],
+              name: 'NO'
+            }
+          ]
+        };
+        
+        // 存储到缓存
+        marketCache.set(processedMarket.marketId, processedMarket);
+        
+        // 映射tokenId到marketId
+        tokenIdToMarket.set(processedMarket.outcomesInfo[0].tokenId, processedMarket.marketId);
+        tokenIdToMarket.set(processedMarket.outcomesInfo[1].tokenId, processedMarket.marketId);
+        
+        processedMarkets.push(processedMarket);
+      }
     }
     
     console.log(colors.green(`已加载 ${processedMarkets.length} 个市场`));
@@ -149,6 +195,7 @@ function notifyOpportunity(opportunity) {
   }
   
   notifiedOpportunities.add(opportunityId);
+  stats.opportunitiesFound++;
   
   console.log(colors.green('\n===== 发现套利机会! ====='));
   console.log(colors.yellow(`市场: ${opportunity.title}`));
@@ -179,7 +226,7 @@ function notifyOpportunity(opportunity) {
  */
 async function getOrderBook(tokenIds) {
   try {
-    const response = await fetch(`https://trading.polymarket.com/order-book?token_ids=${tokenIds.join(',')}`);
+    const response = await fetch(`https://clob.polymarket.com/book?token_id=${tokenIds.join(',')}`);
     if (!response.ok) {
       throw new Error(`获取订单簿失败: ${response.status}`);
     }
@@ -196,6 +243,8 @@ async function getOrderBook(tokenIds) {
  * @param {Object} priceData 价格数据
  */
 async function checkArbitrage(tokenId, priceData) {
+  stats.arbitrageChecks++;
+  
   // 检查tokenId是否在我们的映射中
   if (!tokenIdToMarket.has(tokenId)) {
     return;
@@ -287,10 +336,24 @@ async function checkArbitrage(tokenId, priceData) {
  */
 function handlePriceUpdate(message) {
   try {
-    if (message.type === 'price_change') {
-      const tokenId = message.token_id || message.tokenId; // 兼容不同格式
-      if (tokenId) {
-        checkArbitrage(tokenId, message);
+    stats.messagesReceived++;
+    
+    if (message.event_type === 'price_change' && message.price_changes) {
+      stats.priceUpdates++;
+      // 处理每个价格变化
+      for (const change of message.price_changes) {
+        if (change.asset_id && change.price) {
+          checkArbitrage(change.asset_id, { price: parseFloat(change.price) });
+        }
+      }
+    } else if (message.event_type === 'book' && message.asset_id) {
+      stats.priceUpdates++;
+      // 处理订单簿更新（使用中间价）
+      if (message.bids && message.bids.length > 0 && message.asks && message.asks.length > 0) {
+        const bestBid = parseFloat(message.bids[0].price);
+        const bestAsk = parseFloat(message.asks[0].price);
+        const midPrice = (bestBid + bestAsk) / 2;
+        checkArbitrage(message.asset_id, { price: midPrice });
       }
     }
   } catch (error) {
@@ -326,29 +389,72 @@ function setupWebSocket(tokenIds) {
     return null;
   }
   
-  console.log(colors.cyan(`正在连接WebSocket，订阅 ${tokenIds.length} 个代币的价格更新...`));
+  console.log(colors.cyan('正在连接WebSocket...'));
   
-  // 创建WebSocket连接
-  const ws = new WebSocket('wss://trading.polymarket.com/ws');
+  // 创建WebSocket连接 - 注意URL需要加上 /market
+  const ws = new WebSocket('wss://ws-subscriptions-clob.polymarket.com/ws/market');
   
   ws.on('open', () => {
-    console.log(colors.green('WebSocket连接成功'));
+    console.log(colors.green('✓ WebSocket连接成功\n'));
     
-    // 订阅价格更新
+    // 分批订阅（避免一次性订阅太多token）
+    const BATCH_SIZE = 500;
+    const batches = [];
+    for (let i = 0; i < tokenIds.length; i += BATCH_SIZE) {
+      batches.push(tokenIds.slice(i, i + BATCH_SIZE));
+    }
+    
+    // 订阅第一批
     const subscription = {
-      type: 'subscribe',
-      topic: 'marketSocket',
-      data: {
-        token_ids: tokenIds
-      }
+      assets_ids: batches[0],
+      type: 'MARKET'
     };
     ws.send(JSON.stringify(subscription));
-    console.log(colors.green('已订阅价格更新，开始监控...'));
+    console.log(colors.gray(`正在订阅第 1/${batches.length} 批...`));
+    
+    // 延迟订阅其他批次
+    batches.slice(1).forEach((batch, index) => {
+      setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          const sub = {
+            assets_ids: batch,
+            operation: 'subscribe'
+          };
+          ws.send(JSON.stringify(sub));
+          console.log(colors.gray(`正在订阅第 ${index + 2}/${batches.length} 批...`));
+        }
+      }, (index + 1) * 1000); // 每批间隔1秒
+    });
+    
+    // 所有批次订阅完成后显示完成消息
+    setTimeout(() => {
+      console.log(colors.green(`\n✓ 订阅完成！正在监控 ${tokenIds.length} 个代币的价格变化...`));
+      console.log(colors.cyan('监控运行中，等待套利机会... (每30秒显示一次状态)\n'));
+      
+      // 显示首次状态
+      setTimeout(showStatus, 5000);
+    }, batches.length * 1000 + 500);
+    
+    // 定期发送PING保持连接
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send('PING');
+      } else {
+        clearInterval(pingInterval);
+      }
+    }, 10000); // 每10秒发送一次PING
   });
   
   ws.on('message', (data) => {
     try {
-      const message = JSON.parse(data);
+      const dataStr = data.toString();
+      
+      // 跳过服务器的文本响应（如 "NO NEW ASSETS", "PONG" 等）
+      if (!dataStr.startsWith('{') && !dataStr.startsWith('[')) {
+        return;
+      }
+      
+      const message = JSON.parse(dataStr);
       handlePriceUpdate(message);
     } catch (error) {
       console.error(colors.red(`解析WebSocket消息失败: ${error.message}`));
@@ -371,13 +477,28 @@ function setupWebSocket(tokenIds) {
 }
 
 /**
+ * 显示运行状态
+ */
+function showStatus() {
+  const uptime = Math.floor((Date.now() - stats.startTime) / 1000);
+  const minutes = Math.floor(uptime / 60);
+  const seconds = uptime % 60;
+  
+  console.log(colors.gray(`\n[状态] 运行时间: ${minutes}分${seconds}秒 | 接收消息: ${stats.messagesReceived} | 价格更新: ${stats.priceUpdates} | 套利检查: ${stats.arbitrageChecks} | 发现机会: ${stats.opportunitiesFound}`));
+}
+
+/**
  * 启动监控器
  */
 async function startMonitor() {
   console.log(colors.cyan('Polymarket套利监控器 (Node.js版) 已启动'));
-  console.log(`参数: 阈值=${THRESHOLD}, 最小流动性=${MIN_LIQUIDITY} USDC, 费用率=${ESTIMATED_FEE * 100}%`);
+  console.log(`参数: 阈值=${THRESHOLD}, 最小流动性=${MIN_LIQUIDITY} USDC, 费用率=${ESTIMATED_FEE * 100}%\n`);
   
   try {
+    // 检测API延迟
+    await checkLatency();
+    console.log('');
+    
     // 加载市场数据
     const markets = await loadMarkets();
     
@@ -392,8 +513,17 @@ async function startMonitor() {
       }
     }
     
+    console.log(colors.cyan(`\n共 ${allTokenIds.length} 个代币待订阅`));
+    const batchCount = Math.ceil(allTokenIds.length / 500);
+    console.log(colors.cyan(`将分为 ${batchCount} 批进行订阅\n`));
+    
     // 设置WebSocket连接
     const ws = setupWebSocket(allTokenIds);
+    
+    // 设置定期状态显示 (每30秒)
+    const statusInterval = setInterval(() => {
+      showStatus();
+    }, 30000);
     
     // 设置定期刷新市场数据 (每小时)
     const refreshInterval = setInterval(async () => {
@@ -414,13 +544,10 @@ async function startMonitor() {
       if (ws.readyState !== WebSocket.OPEN) {
         setupWebSocket(newTokenIds);
       } else {
-        // 更新订阅
+        // 更新订阅 - 使用正确的CLOB格式
         const subscription = {
-          type: 'subscribe',
-          topic: 'marketSocket',
-          data: {
-            tokenIds: newTokenIds
-          }
+          assets_ids: newTokenIds,
+          operation: 'subscribe'
         };
         ws.send(JSON.stringify(subscription));
       }
@@ -429,7 +556,9 @@ async function startMonitor() {
     // 优雅退出时清除定时器
     process.on('SIGINT', () => {
       clearInterval(refreshInterval);
+      clearInterval(statusInterval);
       console.log(colors.yellow('\n正在关闭套利监控器...'));
+      showStatus();
       process.exit(0);
     });
     
