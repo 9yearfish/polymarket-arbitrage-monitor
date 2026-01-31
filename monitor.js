@@ -134,8 +134,19 @@ async function loadMarkets() {
           continue;
         }
         
-        if (!market.clobTokenIds || market.clobTokenIds.length < 2) {
+        if (!market.clobTokenIds) {
           continue; // 跳过无效市场
+        }
+        
+        // 解析 clobTokenIds（它是 JSON 字符串！）
+        let tokenIds;
+        try {
+          tokenIds = JSON.parse(market.clobTokenIds);
+          if (!tokenIds || tokenIds.length < 2) {
+            continue;
+          }
+        } catch (e) {
+          continue;
         }
         
         // 解析价格数据（从 Gamma API 返回的数据中）
@@ -151,7 +162,7 @@ async function loadMarkets() {
           continue;
         }
         
-        // 创建规范化的市场对象
+        // 创建规范化的市场对象（使用解析后的 tokenIds）
         const processedMarket = {
           marketId: market.id,
           conditionId: market.conditionId,
@@ -160,12 +171,12 @@ async function loadMarkets() {
           noPrice: noPrice,
           outcomesInfo: [
             { 
-              tokenId: market.clobTokenIds[0], 
+              tokenId: tokenIds[0], 
               name: 'YES',
               price: yesPrice
             },
             { 
-              tokenId: market.clobTokenIds[1],
+              tokenId: tokenIds[1],
               name: 'NO',
               price: noPrice
             }
@@ -198,8 +209,8 @@ async function loadMarkets() {
               totalPrice: totalPrice,
               potentialProfit: potentialProfit,
               minLiquidity: market.liquidityNum || 0,
-              yesTokenId: market.clobTokenIds[0],
-              noTokenId: market.clobTokenIds[1]
+              yesTokenId: tokenIds[0],
+              noTokenId: tokenIds[1]
             };
             
             notifyOpportunity(opportunity);
@@ -443,48 +454,27 @@ async function checkArbitrage(tokenId, priceData) {
     
     // 检查是否低于阈值
     if (totalPrice < THRESHOLD) {
-      try {
-        // 获取流动性信息
-        const orderBook = await getOrderBook([yesTokenId, noTokenId]);
+      // 计算潜在利润（考虑费用）
+      const estimatedFee = (yesPrice + noPrice) * ESTIMATED_FEE;
+      const potentialProfit = 1 - totalPrice - estimatedFee;
+      
+      if (potentialProfit > 0) {
+        const opportunity = {
+          timestamp: new Date().toISOString(),
+          marketId: marketId,
+          conditionId: market.conditionId,
+          title: market.title,
+          yesPrice: yesPrice,
+          noPrice: noPrice,
+          totalPrice: totalPrice,
+          potentialProfit: potentialProfit,
+          minLiquidity: 0, // 从 WebSocket 无法获取流动性，设为 0
+          yesTokenId: yesTokenId,
+          noTokenId: noTokenId
+        };
         
-        // 分析YES和NO的流动性
-        let yesLiquidity = 0;
-        let noLiquidity = 0;
-        
-        if (orderBook[yesTokenId] && orderBook[yesTokenId].bestPrice) {
-          yesLiquidity = orderBook[yesTokenId].bestPrice.buySize || 0;
-        }
-        
-        if (orderBook[noTokenId] && orderBook[noTokenId].bestPrice) {
-          noLiquidity = orderBook[noTokenId].bestPrice.buySize || 0;
-        }
-        
-        const minLiquidity = Math.min(yesLiquidity, noLiquidity);
-        
-        // 计算潜在利润（考虑费用）
-        const estimatedFee = (yesPrice + noPrice) * ESTIMATED_FEE;
-        const potentialProfit = 1 - totalPrice - estimatedFee;
-        
-        if (minLiquidity >= MIN_LIQUIDITY && potentialProfit > 0) {
-          const opportunity = {
-            timestamp: new Date().toISOString(),
-            marketId: marketId,
-            conditionId: market.conditionId,
-            title: market.title,
-            yesPrice: yesPrice,
-            noPrice: noPrice,
-            totalPrice: totalPrice,
-            potentialProfit: potentialProfit,
-            minLiquidity: minLiquidity,
-            yesTokenId: yesTokenId,
-            noTokenId: noTokenId
-          };
-          
-          // 通知
-          notifyOpportunity(opportunity);
-        }
-      } catch (error) {
-        console.error(colors.red(`检查套利机会失败: ${error.message}`));
+        // 通知
+        notifyOpportunity(opportunity);
       }
     }
   }
@@ -500,10 +490,66 @@ function handlePriceUpdate(message) {
     
     if (message.event_type === 'price_change' && message.price_changes) {
       stats.priceUpdates++;
-      // 处理每个价格变化
+      
+      // price_change 消息可能包含同一市场的多个 token 的价格
+      // 按市场分组
+      const marketUpdates = new Map();
+      
       for (const change of message.price_changes) {
-        if (change.asset_id && change.price) {
-          checkArbitrage(change.asset_id, { price: parseFloat(change.price) });
+        const market = message.market;
+        if (!marketUpdates.has(market)) {
+          marketUpdates.set(market, []);
+        }
+        marketUpdates.get(market).push(change);
+      }
+      
+      // 检查每个市场的套利机会
+      for (const [marketConditionId, changes] of marketUpdates) {
+        if (changes.length >= 2) {
+          // 有两个 token 的价格，可能是 YES 和 NO
+          const price1 = parseFloat(changes[0].best_ask || changes[0].price);
+          const price2 = parseFloat(changes[1].best_ask || changes[1].price);
+          
+          const totalPrice = price1 + price2;
+          
+          if (totalPrice < THRESHOLD && totalPrice > 0) {
+            // 找到对应的市场
+            for (const market of marketCache.values()) {
+              if (market.conditionId === marketConditionId) {
+                const estimatedFee = totalPrice * ESTIMATED_FEE;
+                const potentialProfit = 1 - totalPrice - estimatedFee;
+                
+                if (potentialProfit > 0) {
+                  const opportunity = {
+                    timestamp: new Date().toISOString(),
+                    marketId: market.marketId,
+                    conditionId: market.conditionId,
+                    title: market.title,
+                    yesPrice: price1,
+                    noPrice: price2,
+                    totalPrice: totalPrice,
+                    potentialProfit: potentialProfit,
+                    minLiquidity: 0, // WebSocket 不提供流动性信息
+                    yesTokenId: changes[0].asset_id,
+                    noTokenId: changes[1].asset_id
+                  };
+                  
+                  notifyOpportunity(opportunity);
+                }
+                break;
+              }
+            }
+          }
+        } else {
+          // 只有一个 token 的价格更新，使用缓存机制
+          for (const change of changes) {
+            if (change.asset_id && (change.best_ask || change.price)) {
+              const price = parseFloat(change.best_ask || change.price);
+              checkArbitrage(change.asset_id, { price: price }).catch(err => {
+                console.error(colors.gray(`检查套利失败: ${err.message}`));
+              });
+            }
+          }
         }
       }
     } else if (message.event_type === 'book' && message.asset_id) {
@@ -513,11 +559,14 @@ function handlePriceUpdate(message) {
         const bestBid = parseFloat(message.bids[0].price);
         const bestAsk = parseFloat(message.asks[0].price);
         const midPrice = (bestBid + bestAsk) / 2;
-        checkArbitrage(message.asset_id, { price: midPrice });
+        checkArbitrage(message.asset_id, { price: midPrice }).catch(err => {
+          console.error(colors.gray(`检查套利失败: ${err.message}`));
+        });
       }
     }
   } catch (error) {
     console.error(colors.red(`处理价格更新失败: ${error.message}`));
+    console.error(error.stack);
   }
 }
 
