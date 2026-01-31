@@ -129,8 +129,26 @@ async function loadMarkets() {
       }
       
       for (const market of event.markets) {
+        // 跳过已关闭的市场
+        if (market.closed) {
+          continue;
+        }
+        
         if (!market.clobTokenIds || market.clobTokenIds.length < 2) {
           continue; // 跳过无效市场
+        }
+        
+        // 解析价格数据（从 Gamma API 返回的数据中）
+        let yesPrice = 0;
+        let noPrice = 0;
+        
+        try {
+          const prices = JSON.parse(market.outcomePrices);
+          yesPrice = parseFloat(prices[0]);
+          noPrice = parseFloat(prices[1]);
+        } catch (e) {
+          // 如果没有 outcomePrices，跳过这个市场
+          continue;
         }
         
         // 创建规范化的市场对象
@@ -138,14 +156,18 @@ async function loadMarkets() {
           marketId: market.id,
           conditionId: market.conditionId,
           title: market.question || event.title || `Market ${market.id}`,
+          yesPrice: yesPrice,
+          noPrice: noPrice,
           outcomesInfo: [
             { 
               tokenId: market.clobTokenIds[0], 
-              name: 'YES' 
+              name: 'YES',
+              price: yesPrice
             },
             { 
               tokenId: market.clobTokenIds[1],
-              name: 'NO'
+              name: 'NO',
+              price: noPrice
             }
           ]
         };
@@ -158,6 +180,31 @@ async function loadMarkets() {
         tokenIdToMarket.set(processedMarket.outcomesInfo[1].tokenId, processedMarket.marketId);
         
         processedMarkets.push(processedMarket);
+        
+        // 立即检查套利机会
+        const totalPrice = yesPrice + noPrice;
+        if (totalPrice < THRESHOLD && totalPrice > 0) {
+          const estimatedFee = totalPrice * ESTIMATED_FEE;
+          const potentialProfit = 1 - totalPrice - estimatedFee;
+          
+          if (potentialProfit > 0) {
+            const opportunity = {
+              timestamp: new Date().toISOString(),
+              marketId: processedMarket.marketId,
+              conditionId: processedMarket.conditionId,
+              title: processedMarket.title,
+              yesPrice: yesPrice,
+              noPrice: noPrice,
+              totalPrice: totalPrice,
+              potentialProfit: potentialProfit,
+              minLiquidity: market.liquidityNum || 0,
+              yesTokenId: market.clobTokenIds[0],
+              noTokenId: market.clobTokenIds[1]
+            };
+            
+            notifyOpportunity(opportunity);
+          }
+        }
       }
     }
     
