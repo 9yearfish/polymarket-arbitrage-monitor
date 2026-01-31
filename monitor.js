@@ -667,14 +667,7 @@ function setupWebSocket(tokenIds) {
       
       const message = JSON.parse(dataStr);
       
-      // 调试：显示前3条消息
-      if (stats.messagesReceived < 3) {
-        console.log(colors.gray(`\n[调试] 收到消息类型: ${message.event_type || message.type || '未知'}`));
-        if (!Array.isArray(message) && message.event_type) {
-          console.log(colors.gray(`[调试] ${JSON.stringify(message, null, 2).substring(0, 400)}...`));
-        }
-      }
-      
+      // 处理消息
       handlePriceUpdate(message);
     } catch (error) {
       console.error(colors.red(`解析WebSocket消息失败: ${error.message}`));
