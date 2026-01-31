@@ -22,6 +22,7 @@
     "colors": "^1.4.0",
     "csv-writer": "^1.6.0",
     "dotenv": "^16.0.3",
+    "ethers": "^5.8.0",
     "node-fetch": "^3.3.2"
   }
 }
