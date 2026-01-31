@@ -520,7 +520,8 @@ function setupWebSocket(tokenIds) {
     // 订阅第一批 - 注意type必须是小写"market"
     const subscription = {
       assets_ids: batches[0],
-      type: 'market'
+      type: 'market',
+      custom_feature_enabled: true  // 启用额外消息类型
     };
     ws.send(JSON.stringify(subscription));
     console.log(colors.gray(`正在订阅第 1/${batches.length} 批...`));
