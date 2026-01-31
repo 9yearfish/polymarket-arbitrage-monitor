@@ -1,0 +1,27 @@
+{
+  "name": "polymarket-arbitrage-monitor",
+  "version": "1.0.0",
+  "description": "监控Polymarket上的YES+NO<1套利机会",
+  "main": "monitor.js",
+  "scripts": {
+    "start": "node monitor.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "polymarket",
+    "arbitrage",
+    "trading",
+    "cryptocurrency"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@polymarket/clob-client": "^5.2.1",
+    "@polymarket/real-time-data-client": "^1.4.0",
+    "colors": "^1.4.0",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^16.0.3",
+    "node-fetch": "^3.3.2"
+  }
+}
