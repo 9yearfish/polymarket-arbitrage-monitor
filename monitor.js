@@ -220,6 +220,119 @@ function notifyOpportunity(opportunity) {
 }
 
 /**
+ * 获取单个token的价格
+ * @param {string} tokenId token ID
+ * @returns {Object} 价格数据
+ */
+async function getTokenPrice(tokenId) {
+  try {
+    const response = await fetch(`https://clob.polymarket.com/price?token_id=${tokenId}`);
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * 批量获取价格并检查套利
+ */
+async function batchCheckPrices() {
+  const markets = Array.from(marketCache.values());
+  let checkedCount = 0;
+  
+  console.log(colors.gray(`\n[轮询] 开始检查 ${markets.length} 个市场的价格...`));
+  
+  for (const market of markets) {
+    if (!market.outcomesInfo || market.outcomesInfo.length < 2) continue;
+    
+    const yesTokenId = market.outcomesInfo[0].tokenId;
+    const noTokenId = market.outcomesInfo[1].tokenId;
+    
+    // 获取YES和NO的价格
+    const [yesData, noData] = await Promise.all([
+      getTokenPrice(yesTokenId),
+      getTokenPrice(noTokenId)
+    ]);
+    
+    if (yesData && yesData.price && noData && noData.price) {
+      const yesPrice = parseFloat(yesData.price);
+      const noPrice = parseFloat(noData.price);
+      
+      // 更新价格缓存
+      if (!priceCache.has(market.marketId)) {
+        priceCache.set(market.marketId, {});
+      }
+      const cache = priceCache.get(market.marketId);
+      cache.yes = yesPrice;
+      cache.no = noPrice;
+      
+      // 检查套利机会
+      const totalPrice = yesPrice + noPrice;
+      if (totalPrice < THRESHOLD) {
+        await checkArbitrageOpportunity(market, yesPrice, noPrice);
+      }
+      
+      checkedCount++;
+    }
+    
+    // 每10个市场暂停一下，避免请求过快
+    if (checkedCount % 10 === 0) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  
+  console.log(colors.gray(`[轮询] 完成！检查了 ${checkedCount}/${markets.length} 个市场\n`));
+}
+
+/**
+ * 检查套利机会（从价格数据）
+ */
+async function checkArbitrageOpportunity(market, yesPrice, noPrice) {
+  const totalPrice = yesPrice + noPrice;
+  
+  if (totalPrice >= THRESHOLD) return;
+  
+  try {
+    // 获取流动性信息（简化版，使用price API的数据）
+    const yesTokenId = market.outcomesInfo[0].tokenId;
+    const noTokenId = market.outcomesInfo[1].tokenId;
+    
+    // 暂时假设流动性足够，或者设置默认值
+    const minLiquidity = MIN_LIQUIDITY; // 简化处理
+    
+    // 计算潜在利润
+    const estimatedFee = totalPrice * ESTIMATED_FEE;
+    const potentialProfit = 1 - totalPrice - estimatedFee;
+    
+    if (potentialProfit > 0) {
+      stats.opportunitiesFound++;
+      
+      const opportunity = {
+        timestamp: new Date().toISOString(),
+        marketId: market.marketId,
+        conditionId: market.conditionId,
+        title: market.title,
+        yesPrice: yesPrice,
+        noPrice: noPrice,
+        totalPrice: totalPrice,
+        potentialProfit: potentialProfit,
+        minLiquidity: minLiquidity,
+        yesTokenId: yesTokenId,
+        noTokenId: noTokenId
+      };
+      
+      notifyOpportunity(opportunity);
+    }
+  } catch (error) {
+    console.error(colors.red(`检查套利机会失败: ${error.message}`));
+  }
+}
+
+/**
  * 获取订单簿数据
  * @param {Array} tokenIds 要获取订单簿的token IDs
  * @returns {Object} 订单簿数据
@@ -404,10 +517,10 @@ function setupWebSocket(tokenIds) {
       batches.push(tokenIds.slice(i, i + BATCH_SIZE));
     }
     
-    // 订阅第一批
+    // 订阅第一批 - 注意type必须是小写"market"
     const subscription = {
       assets_ids: batches[0],
-      type: 'MARKET'
+      type: 'market'
     };
     ws.send(JSON.stringify(subscription));
     console.log(colors.gray(`正在订阅第 1/${batches.length} 批...`));
@@ -429,10 +542,11 @@ function setupWebSocket(tokenIds) {
     // 所有批次订阅完成后显示完成消息
     setTimeout(() => {
       console.log(colors.green(`\n✓ 订阅完成！正在监控 ${tokenIds.length} 个代币的价格变化...`));
-      console.log(colors.cyan('监控运行中，等待套利机会... (每30秒显示一次状态)\n'));
+      console.log(colors.cyan('📡 WebSocket已连接，等待实时交易和价格更新...'));
+      console.log(colors.gray('(只有当市场有交易活动时才会推送消息，每30秒显示运行状态)\n'));
       
       // 显示首次状态
-      setTimeout(showStatus, 5000);
+      setTimeout(showStatus, 30000);
     }, batches.length * 1000 + 500);
     
     // 定期发送PING保持连接
@@ -455,6 +569,15 @@ function setupWebSocket(tokenIds) {
       }
       
       const message = JSON.parse(dataStr);
+      
+      // 调试：显示前3条消息
+      if (stats.messagesReceived < 3) {
+        console.log(colors.gray(`\n[调试] 收到消息类型: ${message.event_type || message.type || '未知'}`));
+        if (!Array.isArray(message) && message.event_type) {
+          console.log(colors.gray(`[调试] ${JSON.stringify(message, null, 2).substring(0, 400)}...`));
+        }
+      }
+      
       handlePriceUpdate(message);
     } catch (error) {
       console.error(colors.red(`解析WebSocket消息失败: ${error.message}`));
