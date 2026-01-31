@@ -696,8 +696,11 @@ async function startMonitor() {
       showStatus();
     }, 30000);
     
-    // 设置定期刷新市场数据 (每小时)
+    // 设置定期刷新市场数据 (每5分钟)
+    console.log(colors.cyan('\n将每5分钟重新检查市场价格...\n'));
+    
     const refreshInterval = setInterval(async () => {
+      console.log(colors.gray(`\n[${new Date().toLocaleTimeString()}] 重新加载市场数据...`));
       const markets = await loadMarkets();
       
       // 获取最新的token IDs
@@ -722,7 +725,7 @@ async function startMonitor() {
         };
         ws.send(JSON.stringify(subscription));
       }
-    }, 3600000);
+    }, 300000); // 5分钟
     
     // 优雅退出时清除定时器
     process.on('SIGINT', () => {
