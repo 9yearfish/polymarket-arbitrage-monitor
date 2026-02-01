@@ -69,8 +69,12 @@ const stats = {
   priceUpdates: 0,
   arbitrageChecks: 0,
   opportunitiesFound: 0,
-  startTime: Date.now()
+  startTime: Date.now(),
+  lastSaveTime: Date.now()
 };
+
+// 统计历史记录（保留最近10分钟，每分钟一条）
+const statsHistory = [];
 
 /**
  * 检测API延迟
@@ -745,6 +749,44 @@ function setupWebSocket(tokenIds) {
 }
 
 /**
+ * 保存统计快照
+ */
+function saveStatsSnapshot() {
+  const now = Date.now();
+  const uptime = Math.floor((now - stats.startTime) / 1000);
+  
+  const snapshot = {
+    timestamp: new Date().toISOString(),
+    uptime: uptime,
+    messagesReceived: stats.messagesReceived,
+    priceUpdates: stats.priceUpdates,
+    arbitrageChecks: stats.arbitrageChecks,
+    opportunitiesFound: stats.opportunitiesFound,
+    markets: marketCache.size
+  };
+  
+  // 添加到历史记录
+  statsHistory.push(snapshot);
+  
+  // 只保留最近10分钟的记录（假设每30秒一条，20条）
+  if (statsHistory.length > 20) {
+    statsHistory.shift();
+  }
+  
+  // 保存到文件
+  const statsFile = path.join(__dirname, 'data', 'stats.json');
+  try {
+    fs.writeFileSync(statsFile, JSON.stringify({
+      current: snapshot,
+      history: statsHistory,
+      startTime: new Date(stats.startTime).toISOString()
+    }, null, 2));
+  } catch (error) {
+    // 忽略保存错误
+  }
+}
+
+/**
  * 显示运行状态
  */
 function showStatus() {
@@ -753,6 +795,9 @@ function showStatus() {
   const seconds = uptime % 60;
   
   console.log(colors.gray(`\n[状态] 运行时间: ${minutes}分${seconds}秒 | 接收消息: ${stats.messagesReceived} | 价格更新: ${stats.priceUpdates} | 套利检查: ${stats.arbitrageChecks} | 发现机会: ${stats.opportunitiesFound}`));
+  
+  // 保存统计快照
+  saveStatsSnapshot();
 }
 
 /**
