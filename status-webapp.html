@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket 监控状态</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .status-card {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .status-label {
+            font-size: 14px;
+            color: var(--tg-theme-hint-color, #999);
+            margin-bottom: 4px;
+        }
+        .status-value {
+            font-size: 20px;
+            font-weight: 600;
+        }
+        .refresh-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--tg-theme-button-color, #3390ec);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 16px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--tg-theme-hint-color, #999);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Polymarket 监控器</h1>
+        <div id="content" class="loading">加载中...</div>
+    </div>
+    
+    <script>
+        // 初始化 Telegram WebApp
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+        
+        async function loadStatus() {
+            try {
+                const response = await fetch('https://raw.githubusercontent.com/9yearfish/polymarket-arbitrage-monitor/main/status.json?' + Date.now());
+                const data = await response.json();
+                
+                const uptime = data.uptime;
+                const hours = Math.floor(uptime / 3600);
+                const minutes = Math.floor((uptime % 3600) / 60);
+                const uptimeStr = hours > 0 ? `${hours}小时${minutes}分` : `${minutes}分`;
+                
+                document.getElementById('content').innerHTML = `
+                    <div class="status-card">
+                        <div class="status-label">运行时间</div>
+                        <div class="status-value">⏱️ ${uptimeStr}</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">监控市场</div>
+                        <div class="status-value">📈 ${data.markets} 个</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">接收消息</div>
+                        <div class="status-value">📡 ${data.messagesReceived.toLocaleString()} 条</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">价格更新</div>
+                        <div class="status-value">💹 ${data.priceUpdates.toLocaleString()} 次</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">套利检查</div>
+                        <div class="status-value">🔍 ${data.arbitrageChecks.toLocaleString()} 次</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">发现机会</div>
+                        <div class="status-value">🚨 ${data.opportunitiesFound} 个</div>
+                    </div>
+                    <button class="refresh-btn" onclick="loadStatus()">🔄 刷新</button>
+                `;
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="loading">❌ 加载失败<br><br>${error.message}</div>
+                    <button class="refresh-btn" onclick="loadStatus()">🔄 重试</button>
+                `;
+            }
+        }
+        
+        loadStatus();
+    </script>
+</body>
+</html>
