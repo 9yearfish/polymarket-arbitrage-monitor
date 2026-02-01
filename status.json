@@ -1,0 +1,194 @@
+{
+  "current": {
+    "timestamp": "2026-02-01T03:26:52.918Z",
+    "uptime": 4471,
+    "messagesReceived": 756505,
+    "priceUpdates": 747758,
+    "arbitrageChecks": 747648,
+    "opportunitiesFound": 0,
+    "markets": 311
+  },
+  "history": [
+    {
+      "timestamp": "2026-02-01T03:17:58.056Z",
+      "uptime": 3936,
+      "messagesReceived": 567591,
+      "priceUpdates": 560186,
+      "arbitrageChecks": 560122,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:18:22.903Z",
+      "uptime": 3961,
+      "messagesReceived": 575434,
+      "priceUpdates": 567963,
+      "arbitrageChecks": 567899,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:18:52.903Z",
+      "uptime": 3991,
+      "messagesReceived": 585934,
+      "priceUpdates": 578397,
+      "arbitrageChecks": 578333,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:19:22.905Z",
+      "uptime": 4021,
+      "messagesReceived": 596369,
+      "priceUpdates": 588789,
+      "arbitrageChecks": 588725,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:19:52.906Z",
+      "uptime": 4051,
+      "messagesReceived": 605805,
+      "priceUpdates": 598180,
+      "arbitrageChecks": 598116,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:20:22.906Z",
+      "uptime": 4081,
+      "messagesReceived": 616399,
+      "priceUpdates": 608708,
+      "arbitrageChecks": 608644,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:20:52.908Z",
+      "uptime": 4111,
+      "messagesReceived": 625836,
+      "priceUpdates": 618101,
+      "arbitrageChecks": 618037,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:21:22.908Z",
+      "uptime": 4141,
+      "messagesReceived": 638214,
+      "priceUpdates": 630446,
+      "arbitrageChecks": 630382,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:21:52.909Z",
+      "uptime": 4171,
+      "messagesReceived": 647946,
+      "priceUpdates": 640134,
+      "arbitrageChecks": 640048,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:22:22.908Z",
+      "uptime": 4201,
+      "messagesReceived": 656416,
+      "priceUpdates": 648571,
+      "arbitrageChecks": 648485,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:22:52.911Z",
+      "uptime": 4231,
+      "messagesReceived": 666186,
+      "priceUpdates": 658291,
+      "arbitrageChecks": 658205,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:22:57.161Z",
+      "uptime": 4235,
+      "messagesReceived": 667488,
+      "priceUpdates": 659593,
+      "arbitrageChecks": 659507,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:23:22.916Z",
+      "uptime": 4261,
+      "messagesReceived": 677310,
+      "priceUpdates": 669283,
+      "arbitrageChecks": 669197,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:23:52.913Z",
+      "uptime": 4291,
+      "messagesReceived": 689693,
+      "priceUpdates": 681594,
+      "arbitrageChecks": 681508,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:24:22.915Z",
+      "uptime": 4321,
+      "messagesReceived": 700710,
+      "priceUpdates": 692503,
+      "arbitrageChecks": 692417,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:24:52.915Z",
+      "uptime": 4351,
+      "messagesReceived": 712362,
+      "priceUpdates": 703999,
+      "arbitrageChecks": 703913,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:25:22.918Z",
+      "uptime": 4381,
+      "messagesReceived": 722658,
+      "priceUpdates": 714211,
+      "arbitrageChecks": 714101,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:25:52.916Z",
+      "uptime": 4411,
+      "messagesReceived": 733614,
+      "priceUpdates": 725083,
+      "arbitrageChecks": 724973,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:26:22.915Z",
+      "uptime": 4441,
+      "messagesReceived": 744986,
+      "priceUpdates": 736347,
+      "arbitrageChecks": 736237,
+      "opportunitiesFound": 0,
+      "markets": 311
+    },
+    {
+      "timestamp": "2026-02-01T03:26:52.918Z",
+      "uptime": 4471,
+      "messagesReceived": 756505,
+      "priceUpdates": 747758,
+      "arbitrageChecks": 747648,
+      "opportunitiesFound": 0,
+      "markets": 311
+    }
+  ],
+  "startTime": "2026-02-01T02:12:21.639Z"
+}
