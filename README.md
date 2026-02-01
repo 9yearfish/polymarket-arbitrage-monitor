@@ -22,28 +22,20 @@
 - `ESTIMATED_FEE` - 估计的交易费率（默认：0.02，即2%）
 - `CSV_PATH` - 套利机会记录的CSV文件路径（默认：./data/opportunities.csv）
 
-### Telegram 通知配置（可选）
-- `TELEGRAM_BOT_TOKEN` - Telegram Bot Token（从 @BotFather 获取）
-- `TELEGRAM_CHAT_ID` - 接收通知的 Chat ID
+### Telegram 通知（通过 OpenClaw）
 
-#### 如何配置 Telegram 通知：
+监控器会自动通过 OpenClaw 发送 Telegram 通知，无需额外配置！
 
-1. **创建 Telegram Bot**：
-   - 在 Telegram 中搜索 @BotFather
-   - 发送 `/newbot` 命令
-   - 按提示设置 bot 名称
-   - 复制获得的 token 到 `.env` 文件的 `TELEGRAM_BOT_TOKEN`
+**工作原理**：
+1. 监控器发现套利机会时，写入通知队列文件到 `data/notifications/`
+2. OpenClaw 定期检查该目录（通过 heartbeat）
+3. 自动发送通知到 Telegram
 
-2. **获取 Chat ID**：
-   - 搜索并打开你刚创建的 bot
-   - 发送任意消息给它
-   - 访问 `https://api.telegram.org/bot<你的token>/getUpdates`
-   - 找到 `"chat":{"id":` 后面的数字
-   - 复制到 `.env` 文件的 `TELEGRAM_CHAT_ID`
-
-3. **测试通知**：
-   - 配置完成后重启监控器
-   - 如果配置正确，发现套利机会时会自动发送 Telegram 消息
+**通知内容包括**：
+- 市场名称和链接
+- YES/NO 价格
+- 潜在利润百分比
+- 流动性信息
 
 ## 运行方法
 

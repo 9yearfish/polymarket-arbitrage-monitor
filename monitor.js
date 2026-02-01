@@ -12,6 +12,9 @@ const path = require('path');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const dotenv = require('dotenv');
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 // 加载环境变量
 dotenv.config();
@@ -22,10 +25,8 @@ const MIN_LIQUIDITY = parseFloat(process.env.MIN_LIQUIDITY || 10.0);
 const ESTIMATED_FEE = parseFloat(process.env.ESTIMATED_FEE || 0.02);
 const CSV_PATH = process.env.CSV_PATH || './data/opportunities.csv';
 
-// Telegram 配置
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const TELEGRAM_ENABLED = TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID;
+// Telegram 通知配置 - 使用 OpenClaw
+const TELEGRAM_ENABLED = true;  // 默认启用
 
 // 确保CSV目录存在
 const csvDir = path.dirname(CSV_PATH);
@@ -246,7 +247,7 @@ async function saveOpportunity(opportunity) {
 }
 
 /**
- * 发送 Telegram 通知
+ * 发送 Telegram 通知（通过 OpenClaw）
  * @param {string} message 消息内容
  */
 async function sendTelegramNotification(message) {
@@ -255,26 +256,23 @@ async function sendTelegramNotification(message) {
   }
   
   try {
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'HTML',
-        disable_web_page_preview: false
-      })
-    });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      console.error(colors.red(`Telegram 通知发送失败: ${error}`));
+    // 写入通知队列文件，由 OpenClaw 定期检查并发送
+    const notificationsDir = path.join(__dirname, 'data', 'notifications');
+    if (!fs.existsSync(notificationsDir)) {
+      fs.mkdirSync(notificationsDir, { recursive: true });
     }
+    
+    const notificationFile = path.join(notificationsDir, `notify-${Date.now()}.json`);
+    const notification = {
+      timestamp: new Date().toISOString(),
+      message: message,
+      sent: false
+    };
+    
+    fs.writeFileSync(notificationFile, JSON.stringify(notification, null, 2));
+    console.log(colors.gray(`Telegram 通知已加入队列: ${path.basename(notificationFile)}`));
   } catch (error) {
-    console.error(colors.red(`Telegram 通知发送失败: ${error.message}`));
+    console.error(colors.red(`Telegram 通知队列写入失败: ${error.message}`));
   }
 }
 
