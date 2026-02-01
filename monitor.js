@@ -512,6 +512,9 @@ function handlePriceUpdate(message) {
           
           const totalPrice = price1 + price2;
           
+          // 增加套利检查计数
+          stats.arbitrageChecks++;
+          
           if (totalPrice < THRESHOLD && totalPrice > 0) {
             // 找到对应的市场
             for (const market of marketCache.values()) {
