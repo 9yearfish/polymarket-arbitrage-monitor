@@ -9,16 +9,41 @@
 - 计算潜在利润（考虑交易费用）
 - 检查最小流动性要求
 - 将套利机会保存到CSV文件
+- **Telegram 实时通知** - 发现套利机会时立即通知
 - 彩色命令行输出，易于查看
 
 ## 配置参数
 
 配置参数存储在`.env`文件中：
 
+### 套利参数
 - `THRESHOLD` - 套利机会阈值，YES+NO小于此值时触发提醒（默认：0.99）
 - `MIN_LIQUIDITY` - 最小流动性要求，USDC（默认：10.0）
 - `ESTIMATED_FEE` - 估计的交易费率（默认：0.02，即2%）
 - `CSV_PATH` - 套利机会记录的CSV文件路径（默认：./data/opportunities.csv）
+
+### Telegram 通知配置（可选）
+- `TELEGRAM_BOT_TOKEN` - Telegram Bot Token（从 @BotFather 获取）
+- `TELEGRAM_CHAT_ID` - 接收通知的 Chat ID
+
+#### 如何配置 Telegram 通知：
+
+1. **创建 Telegram Bot**：
+   - 在 Telegram 中搜索 @BotFather
+   - 发送 `/newbot` 命令
+   - 按提示设置 bot 名称
+   - 复制获得的 token 到 `.env` 文件的 `TELEGRAM_BOT_TOKEN`
+
+2. **获取 Chat ID**：
+   - 搜索并打开你刚创建的 bot
+   - 发送任意消息给它
+   - 访问 `https://api.telegram.org/bot<你的token>/getUpdates`
+   - 找到 `"chat":{"id":` 后面的数字
+   - 复制到 `.env` 文件的 `TELEGRAM_CHAT_ID`
+
+3. **测试通知**：
+   - 配置完成后重启监控器
+   - 如果配置正确，发现套利机会时会自动发送 Telegram 消息
 
 ## 运行方法
 

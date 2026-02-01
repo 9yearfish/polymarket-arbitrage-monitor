@@ -22,6 +22,11 @@ const MIN_LIQUIDITY = parseFloat(process.env.MIN_LIQUIDITY || 10.0);
 const ESTIMATED_FEE = parseFloat(process.env.ESTIMATED_FEE || 0.02);
 const CSV_PATH = process.env.CSV_PATH || './data/opportunities.csv';
 
+// Telegram 配置
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const TELEGRAM_ENABLED = TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID;
+
 // 确保CSV目录存在
 const csvDir = path.dirname(CSV_PATH);
 if (!fs.existsSync(csvDir)) {
@@ -241,6 +246,39 @@ async function saveOpportunity(opportunity) {
 }
 
 /**
+ * 发送 Telegram 通知
+ * @param {string} message 消息内容
+ */
+async function sendTelegramNotification(message) {
+  if (!TELEGRAM_ENABLED) {
+    return;
+  }
+  
+  try {
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+        parse_mode: 'HTML',
+        disable_web_page_preview: false
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      console.error(colors.red(`Telegram 通知发送失败: ${error}`));
+    }
+  } catch (error) {
+    console.error(colors.red(`Telegram 通知发送失败: ${error.message}`));
+  }
+}
+
+/**
  * 通知发现的套利机会
  * @param {Object} opportunity 套利机会数据
  */
@@ -266,6 +304,22 @@ function notifyOpportunity(opportunity) {
   
   // 保存到CSV
   saveOpportunity(opportunity);
+  
+  // 发送 Telegram 通知
+  const profitPercent = (opportunity.potentialProfit * 100).toFixed(2);
+  const telegramMessage = `🚨 <b>发现套利机会！</b>\n\n` +
+    `📊 <b>市场</b>: ${opportunity.title}\n\n` +
+    `💰 <b>价格</b>:\n` +
+    `  YES: ${opportunity.yesPrice.toFixed(4)}\n` +
+    `  NO: ${opportunity.noPrice.toFixed(4)}\n` +
+    `  总价: ${opportunity.totalPrice.toFixed(4)}\n\n` +
+    `✅ <b>潜在利润</b>: ${profitPercent}%\n` +
+    `💧 <b>流动性</b>: ${opportunity.minLiquidity.toFixed(2)} USDC\n\n` +
+    `🔗 <a href="https://polymarket.com/event/${opportunity.marketId}">查看市场</a>`;
+  
+  sendTelegramNotification(telegramMessage).catch(err => {
+    console.error(colors.red(`Telegram 通知失败: ${err.message}`));
+  });
   
   // 维护通知集合大小
   if (notifiedOpportunities.size > 100) {
